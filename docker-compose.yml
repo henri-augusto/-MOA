@@ -1,0 +1,13 @@
+# No VPS, copie .env.example para .env, preencha DOCKERHUB_USERNAME e rode:
+#   docker compose pull && docker compose up -d
+services:
+  moa:
+    image: ${DOCKERHUB_USERNAME}/moa:${IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
