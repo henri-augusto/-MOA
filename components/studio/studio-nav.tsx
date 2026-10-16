@@ -3,25 +3,39 @@
 import type { Icon } from "@phosphor-icons/react/dist/lib/types";
 import { HouseSimpleIcon } from "@phosphor-icons/react/dist/csr/HouseSimple";
 import { MusicNotesIcon } from "@phosphor-icons/react/dist/csr/MusicNotes";
+import { QueueIcon } from "@phosphor-icons/react/dist/csr/Queue";
 import { UserCircleIcon } from "@phosphor-icons/react/dist/csr/UserCircle";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const links: { href: string; label: string; icon: Icon }[] = [
+const baseLinks: { href: string; label: string; icon: Icon }[] = [
   { href: "/arranjador", label: "Início", icon: HouseSimpleIcon },
   { href: "/arranjador/obras", label: "Obras", icon: MusicNotesIcon },
   { href: "/arranjador/perfil", label: "Perfil", icon: UserCircleIcon },
 ];
 
+const curatorLink = { href: "/curadoria", label: "Curadoria", icon: QueueIcon };
+
 function isActive(href: string, pathname: string | null) {
   if (!pathname) return false;
   if (href === "/arranjador") return pathname === href;
+  if (href === "/curadoria") return pathname === href || pathname.startsWith("/curadoria/");
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 type Layout = "sidebar" | "tabs";
 
-export function StudioNavLinks({ pathname, layout }: { pathname: string | null; layout: Layout }) {
+export function StudioNavLinks({
+  pathname,
+  layout,
+  showCurator = false,
+}: {
+  pathname: string | null;
+  layout: Layout;
+  showCurator?: boolean;
+}) {
+  const links = showCurator ? [...baseLinks, curatorLink] : baseLinks;
+
   if (layout === "tabs") {
     return (
       <ul className="flex gap-1 overflow-x-auto">
@@ -73,7 +87,7 @@ export function StudioNavLinks({ pathname, layout }: { pathname: string | null; 
   );
 }
 
-export function StudioNav({ layout }: { layout: Layout }) {
+export function StudioNav({ layout, showCurator = false }: { layout: Layout; showCurator?: boolean }) {
   const pathname = usePathname();
-  return <StudioNavLinks pathname={pathname} layout={layout} />;
+  return <StudioNavLinks pathname={pathname} layout={layout} showCurator={showCurator} />;
 }

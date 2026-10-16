@@ -11,7 +11,9 @@ export const metadata: Metadata = {
 
 async function NewWorkForm() {
   const { userId } = await requireArranger();
-  return <WorkForm userId={userId} work={null} files={{ score: null, parts: null, audio: null }} />;
+  return (
+    <WorkForm userId={userId} work={null} files={{ score: null, parts: null, audio: null, preview: null }} />
+  );
 }
 
 export default function NewWorkPage() {

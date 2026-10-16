@@ -1,5 +1,6 @@
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr/ArrowRight";
 import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr/SealCheck";
+import Link from "next/link";
 import { Baton } from "./logo";
 import { ScoreSheet } from "./score-sheet";
 
@@ -37,8 +38,8 @@ export function Hero() {
           className="animate-rise mt-10 flex flex-col gap-3 sm:flex-row"
           style={{ animationDelay: "300ms" }}
         >
-          <a
-            href="#acervo"
+          <Link
+            href="/acervo"
             className="group inline-flex min-h-12 items-center justify-center gap-3 rounded-md bg-copper px-6 text-sm font-semibold text-charcoal transition duration-300 hover:bg-[#B8924B] active:scale-[0.98]"
           >
             Explorar o acervo
@@ -47,7 +48,7 @@ export function Hero() {
               weight="light"
               className="transition-transform duration-300 ease-gallery group-hover:translate-x-1"
             />
-          </a>
+          </Link>
           <a
             href="/arranjador/cadastro"
             className="inline-flex min-h-12 items-center justify-center rounded-md border border-charcoal px-6 text-sm font-medium text-charcoal transition duration-300 hover:bg-charcoal hover:text-paper-soft active:scale-[0.98]"

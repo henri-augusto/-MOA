@@ -63,38 +63,94 @@ function Staff({ top, notes }: { top: number; notes: number[] }) {
   );
 }
 
-export function ScoreSheet({ className = "" }: { className?: string }) {
+type ScoreSheetProps = {
+  className?: string;
+  title?: string;
+  subtitle?: string;
+  composer?: string;
+  arranger?: string;
+  tempo?: string;
+  footer?: string;
+  systems?: number[][];
+};
+
+export function ScoreSheet({
+  className = "",
+  title = "Odeon",
+  subtitle = "Tango brasileiro para orquestra de cordas",
+  composer = "Ernesto Nazareth",
+  arranger = "Helena Vasconcellos Prado",
+  tempo,
+  footer = "MOA · GRADE — 1",
+  systems: systemsProp,
+}: ScoreSheetProps) {
+  const staves = systemsProp ?? systems;
+  const titleSize = title.length > 18 ? 20 : 26;
+  const tempoMark = tempo?.trim();
+
   return (
     <svg
       role="img"
-      aria-label="Primeira página de uma partitura de Odeon, de Ernesto Nazareth, arranjada para orquestra de cordas"
+      aria-label={`Primeira página de uma partitura de ${title}, de ${composer}, arranjo de ${arranger}`}
       viewBox="0 0 400 520"
       className={className}
     >
       <rect width="400" height="520" fill="#FFFFFF" />
-      <text x="200" y="58" textAnchor="middle" fontFamily="var(--font-playfair-display), serif" fontSize="26" fill="#1C1C1C">
-        Odeon
+      <text
+        x="200"
+        y="58"
+        textAnchor="middle"
+        fontFamily="var(--font-playfair-display), serif"
+        fontSize={titleSize}
+        fill="#1C1C1C"
+      >
+        {title}
       </text>
-      <text x="200" y="80" textAnchor="middle" fontFamily="var(--font-jakarta), sans-serif" fontSize="8.5" letterSpacing="2.4" fill="#5F5A52">
-        TANGO BRASILEIRO PARA ORQUESTRA DE CORDAS
+      <text
+        x="200"
+        y="80"
+        textAnchor="middle"
+        fontFamily="var(--font-jakarta), sans-serif"
+        fontSize="8.5"
+        letterSpacing="1.6"
+        fill="#5F5A52"
+      >
+        {subtitle.toLocaleUpperCase("pt-BR")}
       </text>
       <text x="372" y="106" textAnchor="end" fontFamily="var(--font-jakarta), sans-serif" fontSize="8" fill="#2D2D2D">
-        Ernesto Nazareth
+        {composer}
       </text>
       <text x="372" y="118" textAnchor="end" fontFamily="var(--font-jakarta), sans-serif" fontSize="8" fill="#7D5F26">
-        arr. Helena Vasconcellos Prado
+        arr. {arranger}
       </text>
-      <text x={STAFF_LEFT} y="134" fontFamily="var(--font-playfair-display), serif" fontStyle="italic" fontSize="9" fill="#2D2D2D">
-        Allegretto, com graça
-      </text>
+      {tempoMark ? (
+        <text
+          x={STAFF_LEFT}
+          y="134"
+          fontFamily="var(--font-playfair-display), serif"
+          fontStyle="italic"
+          fontSize="9"
+          fill="#2D2D2D"
+        >
+          {tempoMark}
+        </text>
+      ) : null}
 
-      {systems.map((notes, index) => (
+      {staves.map((notes, index) => (
         <Staff key={index} top={160 + index * 82} notes={notes} />
       ))}
 
       <line x1={STAFF_LEFT} x2={STAFF_RIGHT} y1="492" y2="492" stroke="#E8E3D5" />
-      <text x="200" y="506" textAnchor="middle" fontFamily="var(--font-jakarta), sans-serif" fontSize="7" letterSpacing="1.6" fill="#5F5A52">
-        MOA · ACERVO PREMIUM · GRADE — 1
+      <text
+        x="200"
+        y="506"
+        textAnchor="middle"
+        fontFamily="var(--font-jakarta), sans-serif"
+        fontSize="7"
+        letterSpacing="1.6"
+        fill="#5F5A52"
+      >
+        {footer}
       </text>
     </svg>
   );

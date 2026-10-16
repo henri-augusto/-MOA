@@ -1,4 +1,5 @@
 import { FORMATIONS, parsePriceToCents } from "./catalog";
+import { parseYoutubeVideoId } from "./youtube";
 
 export type WorkDraft = {
   title: string;
@@ -10,13 +11,16 @@ export type WorkDraft = {
   partsCount: string;
   price: string;
   description: string;
+  youtubeUrl: string;
 };
 
 export type WorkIntent = "rascunho" | "revisao";
 
 export type FileSlot = "score" | "parts" | "audio";
 
-export type WorkErrors = Partial<Record<keyof WorkDraft | "duration" | FileSlot, string>>;
+export type WorkErrors = Partial<
+  Record<keyof WorkDraft | "duration" | FileSlot | "preview", string>
+>;
 
 export type WorkValues = {
   title: string;
@@ -27,6 +31,7 @@ export type WorkValues = {
   parts_count: number;
   price_cents: number;
   description: string | null;
+  preview_video_id: string | null;
 };
 
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -36,6 +41,8 @@ export const FILE_NAMES: Record<FileSlot, string> = {
   parts: "partes.pdf",
   audio: "audio-referencia",
 };
+
+export const PREVIEW_FILE_NAME = "preview.jpg";
 
 export const AUDIO_TYPES = [
   "audio/mpeg",
@@ -65,6 +72,7 @@ export function validateWorkDraft(draft: WorkDraft): { errors: WorkErrors; value
   const seconds = draft.seconds.trim() ? toInt(draft.seconds) : 0;
   const partsCount = toInt(draft.partsCount);
   const priceCents = parsePriceToCents(draft.price);
+  const youtube = parseYoutubeVideoId(draft.youtubeUrl);
 
   if (!title) errors.title = "Informe o título da obra.";
   else if (title.length > 160) errors.title = "Use até 160 caracteres.";
@@ -90,6 +98,8 @@ export function validateWorkDraft(draft: WorkDraft): { errors: WorkErrors; value
 
   if (description.length > 1200) errors.description = "Use até 1.200 caracteres.";
 
+  if (youtube.error) errors.youtubeUrl = youtube.error;
+
   if (Object.keys(errors).length > 0) return { errors, values: null };
 
   return {
@@ -103,6 +113,7 @@ export function validateWorkDraft(draft: WorkDraft): { errors: WorkErrors; value
       parts_count: partsCount,
       price_cents: priceCents as number,
       description: description || null,
+      preview_video_id: youtube.id,
     },
   };
 }
@@ -116,9 +127,17 @@ export function validateFile(slot: FileSlot, file: File | null) {
   return file.type === "application/pdf" ? undefined : "Envie um arquivo PDF.";
 }
 
-export function reviewRequirementErrors(hasScore: boolean, hasParts: boolean): WorkErrors {
+export function reviewRequirementErrors(
+  hasScore: boolean,
+  hasParts: boolean,
+  hasPreview: boolean,
+): WorkErrors {
   const errors: WorkErrors = {};
   if (!hasScore) errors.score = "A revisão precisa da grade em PDF.";
   if (!hasParts) errors.parts = "A revisão precisa das partes em PDF.";
+  if (hasScore && !hasPreview) {
+    errors.preview = "A revisão precisa da prévia da primeira página. Reenvie a grade em PDF.";
+    errors.score ??= errors.preview;
+  }
   return errors;
 }

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireArranger } from "@/lib/arranger/session";
 import {
   FILE_NAMES,
+  PREVIEW_FILE_NAME,
   reviewRequirementErrors,
   validateWorkDraft,
   type FileSlot,
@@ -57,13 +58,14 @@ export async function attachWorkFiles(
   workId: string,
   uploaded: FileSlot[],
   intent: WorkIntent,
+  options?: { previewUploaded?: boolean },
 ): Promise<{ ok: true } | ActionFailure> {
   const { supabase, userId } = await requireArranger();
   if (!UUID_PATTERN.test(workId)) return { ok: false, error: "Obra não encontrada." };
 
   const { data: work } = await supabase
     .from("works")
-    .select("score_path, parts_path, audio_path, status")
+    .select("score_path, parts_path, audio_path, preview_path, status")
     .eq("id", workId)
     .eq("arranger_id", userId)
     .maybeSingle();
@@ -76,10 +78,20 @@ export async function attachWorkFiles(
     score_path: uploaded.includes("score") ? `${folder}/${FILE_NAMES.score}` : (work.score_path as string | null),
     parts_path: uploaded.includes("parts") ? `${folder}/${FILE_NAMES.parts}` : (work.parts_path as string | null),
     audio_path: uploaded.includes("audio") ? `${folder}/${FILE_NAMES.audio}` : (work.audio_path as string | null),
+    preview_path: options?.previewUploaded
+      ? `${folder}/${PREVIEW_FILE_NAME}`
+      : uploaded.includes("score")
+        ? null
+        : (work.preview_path as string | null),
   };
 
+  // Score replaced without a new preview clears preview_path above.
   if (intent === "revisao") {
-    const missing = reviewRequirementErrors(Boolean(paths.score_path), Boolean(paths.parts_path));
+    const missing = reviewRequirementErrors(
+      Boolean(paths.score_path),
+      Boolean(paths.parts_path),
+      Boolean(paths.preview_path),
+    );
     if (Object.keys(missing).length > 0) {
       await supabase.from("works").update(paths).eq("id", workId);
       return { ok: false, fieldErrors: missing, error: "A obra foi salva como rascunho; faltam arquivos para a revisão." };
@@ -88,7 +100,11 @@ export async function attachWorkFiles(
 
   const { error } = await supabase
     .from("works")
-    .update({ ...paths, status: intent === "revisao" ? "em_revisao" : "rascunho" })
+    .update({
+      ...paths,
+      status: intent === "revisao" ? "em_revisao" : "rascunho",
+      ...(intent === "revisao" ? { review_note: null } : {}),
+    })
     .eq("id", workId);
 
   if (error) return { ok: false, error: "Os arquivos subiram, mas não foi possível registrar a obra. Tente novamente." };

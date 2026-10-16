@@ -78,9 +78,17 @@ export async function signUp(_prev: AuthState, formData: FormData): Promise<Auth
   redirect("/arranjador/perfil");
 }
 
+const SIGN_IN_DESTINATIONS = new Set(["/arranjador", "/curadoria"]);
+
+function signInDestination(raw: FormDataEntryValue | null) {
+  const next = typeof raw === "string" ? raw : "";
+  return SIGN_IN_DESTINATIONS.has(next) ? next : "/arranjador";
+}
+
 export async function signIn(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
+  const next = signInDestination(formData.get("next"));
 
   const fieldErrors: AuthState["fieldErrors"] = {};
   if (!EMAIL_PATTERN.test(email)) fieldErrors.email = "Informe um e-mail válido.";
@@ -97,5 +105,5 @@ export async function signIn(_prev: AuthState, formData: FormData): Promise<Auth
     };
   }
 
-  redirect("/arranjador");
+  redirect(next);
 }

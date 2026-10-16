@@ -11,12 +11,13 @@ import {
 } from "@/components/studio/form";
 import { signIn, type AuthState } from "../actions";
 
-export function SignInForm() {
+export function SignInForm({ next = "/arranjador" }: { next?: "/arranjador" | "/curadoria" }) {
   const [state, formAction, pending] = useActionState<AuthState, FormData>(signIn, {});
   const errors = state.fieldErrors ?? {};
 
   return (
     <form action={formAction} noValidate className="grid gap-6">
+      <input type="hidden" name="next" value={next} />
       {state.error ? <FormAlert>{state.error}</FormAlert> : null}
 
       <Field id="entrar-email" label="E-mail" error={errors.email}>

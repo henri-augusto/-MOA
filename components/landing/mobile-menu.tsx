@@ -1,7 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { navLinks } from "./nav-links";
+
+function MobileNavLinks({ pathname, onNavigate }: { pathname: string | null; onNavigate: () => void }) {
+  return (
+    <ul className="divide-y divide-staff">
+      {navLinks.map((link, index) => {
+        const active = link.href === "/acervo" && Boolean(pathname?.startsWith("/acervo"));
+        return (
+          <li key={link.href} className="animate-rise" style={{ animationDelay: `${index * 60}ms` }}>
+            <Link
+              href={link.href}
+              onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
+              className="flex min-h-12 items-center font-playfair text-2xl text-charcoal"
+            >
+              {link.label}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function MobileNav({ onNavigate }: { onNavigate: () => void }) {
+  const pathname = usePathname();
+  return <MobileNavLinks pathname={pathname} onNavigate={onNavigate} />;
+}
 
 export function MobileMenu() {
   const [open, setOpen] = useState(false);
@@ -43,39 +72,25 @@ export function MobileMenu() {
         className="absolute inset-x-4 top-[calc(100%+0.5rem)] rounded-md border border-staff bg-paper-soft p-6 shadow-[0_24px_60px_-30px_rgba(45,45,45,0.45)]"
       >
         <nav aria-label="Principal (mobile)">
-          <ul className="divide-y divide-staff">
-            {navLinks.map((link, index) => (
-              <li
-                key={link.href}
-                className="animate-rise"
-                style={{ animationDelay: `${index * 60}ms` }}
-              >
-                <a
-                  href={link.href}
-                  onClick={close}
-                  className="flex min-h-12 items-center font-playfair text-2xl text-charcoal"
-                >
-                  {link.label}
-                </a>
-              </li>
-            ))}
-          </ul>
+          <Suspense fallback={<MobileNavLinks pathname={null} onNavigate={close} />}>
+            <MobileNav onNavigate={close} />
+          </Suspense>
         </nav>
         <div className="mt-6 grid gap-3">
-          <a
-            href="#acervo"
+          <Link
+            href="/acervo"
             onClick={close}
             className="inline-flex min-h-12 items-center justify-center rounded-md bg-copper text-sm font-semibold text-charcoal"
           >
             Adquirir obra
-          </a>
-          <a
+          </Link>
+          <Link
             href="/arranjador/cadastro"
             onClick={close}
             className="inline-flex min-h-12 items-center justify-center rounded-md border border-charcoal text-sm font-medium text-charcoal"
           >
             Publicar obra
-          </a>
+          </Link>
         </div>
       </div>
     </div>

@@ -16,3 +16,9 @@ export function supabaseEnv() {
 }
 
 export const ARRANGEMENTS_BUCKET = "arrangements";
+export const PREVIEWS_BUCKET = "previews";
+
+export function publicPreviewUrl(workId: string) {
+  const { url } = supabaseEnv();
+  return `${url}/storage/v1/object/public/${PREVIEWS_BUCKET}/${workId}.jpg`;
+}

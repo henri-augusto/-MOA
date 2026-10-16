@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, supabaseEnv } from "./env";
 
 const PUBLIC_ARRANGER_PATHS = ["/arranjador/entrar", "/arranjador/cadastro"];
+const PUBLIC_CURATOR_PATHS = ["/curadoria/entrar"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -31,6 +32,8 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isArrangerArea = pathname === "/arranjador" || pathname.startsWith("/arranjador/");
   const isPublicArrangerPath = PUBLIC_ARRANGER_PATHS.some((path) => pathname.startsWith(path));
+  const isCuratorArea = pathname === "/curadoria" || pathname.startsWith("/curadoria/");
+  const isPublicCuratorPath = PUBLIC_CURATOR_PATHS.some((path) => pathname.startsWith(path));
 
   if (isArrangerArea && !isPublicArrangerPath && !signedIn) {
     return redirectKeepingCookies(request, response, "/arranjador/entrar");
@@ -38,6 +41,14 @@ export async function updateSession(request: NextRequest) {
 
   if (isPublicArrangerPath && signedIn) {
     return redirectKeepingCookies(request, response, "/arranjador");
+  }
+
+  if (isCuratorArea && !isPublicCuratorPath && !signedIn) {
+    return redirectKeepingCookies(request, response, "/curadoria/entrar");
+  }
+
+  if (isPublicCuratorPath && signedIn) {
+    return redirectKeepingCookies(request, response, "/curadoria");
   }
 
   return response;

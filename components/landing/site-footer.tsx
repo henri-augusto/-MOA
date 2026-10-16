@@ -25,7 +25,7 @@ export function SiteFooter() {
               </li>
             ))}
             <li>
-              <a href="#interesse" className="inline-flex min-h-10 items-center text-ink hover:text-copper-deep">
+              <a href="/#interesse" className="inline-flex min-h-10 items-center text-ink hover:text-copper-deep">
                 Lista de abertura
               </a>
             </li>

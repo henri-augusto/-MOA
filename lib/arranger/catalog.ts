@@ -35,6 +35,9 @@ export type Work = {
   score_path: string | null;
   parts_path: string | null;
   audio_path: string | null;
+  preview_path: string | null;
+  preview_video_id: string | null;
+  review_note: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -46,6 +49,7 @@ export type Profile = {
   city: string | null;
   bio: string | null;
   formations: string[];
+  is_curator?: boolean;
 };
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });

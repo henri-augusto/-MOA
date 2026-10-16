@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { EnsurePublicPreview } from "@/components/marketplace/ensure-public-preview";
 import { PageHeader, SectionSkeleton } from "@/components/studio/page-header";
 import { StatusBadge } from "@/components/studio/status-badge";
 import type { Work } from "@/lib/arranger/catalog";
@@ -32,7 +33,9 @@ async function EditWork({ params }: { params: Promise<{ id: string }> }) {
 
   if (!work) notFound();
 
-  const paths = [work.score_path, work.parts_path, work.audio_path].filter((path): path is string => Boolean(path));
+  const paths = [work.score_path, work.parts_path, work.audio_path, work.preview_path].filter(
+    (path): path is string => Boolean(path),
+  );
   const signed = new Map<string, string>();
   if (paths.length > 0) {
     const { data } = await supabase.storage.from(ARRANGEMENTS_BUCKET).createSignedUrls(paths, SIGNED_URL_SECONDS);
@@ -45,6 +48,7 @@ async function EditWork({ params }: { params: Promise<{ id: string }> }) {
     score: work.score_path ? (signed.get(work.score_path) ?? null) : null,
     parts: work.parts_path ? (signed.get(work.parts_path) ?? null) : null,
     audio: work.audio_path ? (signed.get(work.audio_path) ?? null) : null,
+    preview: work.preview_path ? (signed.get(work.preview_path) ?? null) : null,
   };
 
   return (
@@ -61,6 +65,9 @@ async function EditWork({ params }: { params: Promise<{ id: string }> }) {
       <div className="mt-10">
         <WorkForm key={work.updated_at} userId={userId} work={work} files={files} />
       </div>
+      {work.status === "publicado" && (files.score || files.preview) ? (
+        <EnsurePublicPreview workId={work.id} scoreUrl={files.score} previewUrl={files.preview} />
+      ) : null}
       {work.status === "rascunho" ? (
         <div className="mt-16 border-t border-staff pt-8">
           <DeleteWorkButton workId={work.id} title={work.title} />

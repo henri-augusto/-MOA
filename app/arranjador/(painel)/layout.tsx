@@ -4,23 +4,33 @@ import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 import { Logo } from "@/components/landing/logo";
 import { StudioNav, StudioNavLinks } from "@/components/studio/studio-nav";
+import { cache } from "react";
 import { displayName } from "@/lib/arranger/catalog";
 import { requireArranger } from "@/lib/arranger/session";
 import { signOut } from "./actions";
 
-async function ArrangerBadge() {
+const studioProfile = cache(async () => {
   const { supabase, userId } = await requireArranger();
   const { data } = await supabase
     .from("profiles")
-    .select("artist_name, full_name")
+    .select("artist_name, full_name, is_curator")
     .eq("id", userId)
     .maybeSingle();
+  return data;
+});
 
+async function ArrangerBadge() {
+  const data = await studioProfile();
   return (
     <p className="truncate text-sm text-paper-soft" title={displayName(data)}>
       {displayName(data)}
     </p>
   );
+}
+
+async function StudioNavigation({ layout }: { layout: "sidebar" | "tabs" }) {
+  const data = await studioProfile();
+  return <StudioNav layout={layout} showCurator={Boolean(data?.is_curator)} />;
 }
 
 function SignOutButton({ compact = false }: { compact?: boolean }) {
@@ -52,7 +62,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
 
         <nav aria-label="Estúdio" className="mt-12">
           <Suspense fallback={<StudioNavLinks pathname={null} layout="sidebar" />}>
-            <StudioNav layout="sidebar" />
+            <StudioNavigation layout="sidebar" />
           </Suspense>
         </nav>
 
@@ -83,7 +93,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
         </div>
         <nav aria-label="Estúdio" className="mt-3 -mx-1">
           <Suspense fallback={<StudioNavLinks pathname={null} layout="tabs" />}>
-            <StudioNav layout="tabs" />
+            <StudioNavigation layout="tabs" />
           </Suspense>
         </nav>
       </header>

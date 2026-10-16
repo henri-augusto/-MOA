@@ -16,9 +16,11 @@ import {
   secondaryButtonClass,
 } from "@/components/studio/form";
 import { FORMATIONS, priceInputValue, type Work } from "@/lib/arranger/catalog";
+import { renderScorePreview } from "@/lib/arranger/score-preview";
 import {
   AUDIO_TYPES,
   FILE_NAMES,
+  PREVIEW_FILE_NAME,
   reviewRequirementErrors,
   validateFile,
   validateWorkDraft,
@@ -27,11 +29,12 @@ import {
   type WorkErrors,
   type WorkIntent,
 } from "@/lib/arranger/work-form";
+import { youtubeWatchUrl } from "@/lib/arranger/youtube";
 import { createClient } from "@/lib/supabase/client";
 import { ARRANGEMENTS_BUCKET } from "@/lib/supabase/env";
 import { attachWorkFiles, saveWorkDetails } from "./actions";
 
-export type ExistingFiles = Record<FileSlot, string | null>;
+export type ExistingFiles = Record<FileSlot, string | null> & { preview: string | null };
 
 const LEVELS = [
   { value: "1", label: "1 — Iniciante" },
@@ -42,7 +45,7 @@ const LEVELS = [
 ];
 
 const SLOTS: { slot: FileSlot; label: string; hint: string; accept: string }[] = [
-  { slot: "score", label: "Grade completa", hint: "PDF, até 50 MB.", accept: "application/pdf" },
+  { slot: "score", label: "Grade completa", hint: "PDF, até 50 MB. A primeira página vira a prévia do acervo.", accept: "application/pdf" },
   { slot: "parts", label: "Partes cavadas", hint: "Todas as partes em um único PDF, até 50 MB.", accept: "application/pdf" },
   { slot: "audio", label: "Áudio de referência", hint: "Opcional. MP3, M4A, WAV, OGG ou FLAC, até 50 MB.", accept: AUDIO_TYPES.join(",") },
 ];
@@ -58,9 +61,11 @@ const FIELD_ORDER: (keyof WorkErrors)[] = [
   "partsCount",
   "price",
   "description",
+  "youtubeUrl",
   "score",
   "parts",
   "audio",
+  "preview",
 ];
 
 const FIELD_IDS: Partial<Record<keyof WorkErrors, string>> = {
@@ -72,9 +77,11 @@ const FIELD_IDS: Partial<Record<keyof WorkErrors, string>> = {
   partsCount: "obra-partes",
   price: "obra-preco",
   description: "obra-descricao",
+  youtubeUrl: "obra-youtube",
   score: "obra-arquivo-score",
   parts: "obra-arquivo-parts",
   audio: "obra-arquivo-audio",
+  preview: "obra-arquivo-score",
 };
 
 function formatBytes(bytes: number) {
@@ -102,13 +109,19 @@ export function WorkForm({ userId, work, files }: WorkFormProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [selected, setSelected] = useState<Record<FileSlot, File | null>>({ score: null, parts: null, audio: null });
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
 
   const readOnly = work?.status === "publicado";
   const busy = phase.kind === "busy";
+  const previewUrl = localPreviewUrl ?? files.preview;
 
   function pickFile(slot: FileSlot, file: File | null) {
     setSelected((current) => ({ ...current, [slot]: file }));
-    setErrors((current) => ({ ...current, [slot]: validateFile(slot, file) }));
+    setErrors((current) => ({ ...current, [slot]: validateFile(slot, file), preview: undefined }));
+    if (slot === "score") {
+      if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+      setLocalPreviewUrl(null);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -128,6 +141,7 @@ export function WorkForm({ userId, work, files }: WorkFormProps) {
       partsCount: String(data.get("partsCount") ?? ""),
       price: String(data.get("price") ?? ""),
       description: String(data.get("description") ?? ""),
+      youtubeUrl: String(data.get("youtubeUrl") ?? ""),
     };
 
     const nextErrors: WorkErrors = { ...validateWorkDraft(draft).errors };
@@ -136,9 +150,12 @@ export function WorkForm({ userId, work, files }: WorkFormProps) {
       if (fileError) nextErrors[slot] = fileError;
     }
     if (intent === "revisao") {
-      const missing = reviewRequirementErrors(Boolean(selected.score || files.score), Boolean(selected.parts || files.parts));
-      for (const slot of ["score", "parts"] as const) {
-        nextErrors[slot] ??= missing[slot];
+      const willHaveScore = Boolean(selected.score || files.score);
+      const willHaveParts = Boolean(selected.parts || files.parts);
+      const willHavePreview = Boolean(selected.score || files.preview);
+      const missing = reviewRequirementErrors(willHaveScore, willHaveParts, willHavePreview);
+      for (const key of ["score", "parts", "preview"] as const) {
+        nextErrors[key] ??= missing[key];
       }
     }
 
@@ -161,6 +178,9 @@ export function WorkForm({ userId, work, files }: WorkFormProps) {
 
     const supabase = createClient();
     const uploaded: FileSlot[] = [];
+    let previewUploaded = false;
+    const folder = `${userId}/${saved.id}`;
+
     for (const { slot } of SLOTS) {
       const file = selected[slot];
       if (!file) continue;
@@ -168,14 +188,14 @@ export function WorkForm({ userId, work, files }: WorkFormProps) {
       setPhase({ kind: "busy", label: `Enviando ${SLOT_NAMES[slot]}…` });
       const { error } = await supabase.storage
         .from(ARRANGEMENTS_BUCKET)
-        .upload(`${userId}/${saved.id}/${FILE_NAMES[slot]}`, file, {
+        .upload(`${folder}/${FILE_NAMES[slot]}`, file, {
           upsert: true,
           contentType: file.type,
           cacheControl: "3600",
         });
 
       if (error) {
-        await attachWorkFiles(saved.id, uploaded, "rascunho");
+        await attachWorkFiles(saved.id, uploaded, "rascunho", { previewUploaded });
         setPhase({ kind: "idle" });
         const message = `Não foi possível enviar ${SLOT_NAMES[slot]}. Os dados ficaram salvos como rascunho; tente anexar o arquivo de novo.`;
         if (work) {
@@ -187,10 +207,52 @@ export function WorkForm({ userId, work, files }: WorkFormProps) {
         return;
       }
       uploaded.push(slot);
+
+      if (slot === "score") {
+        setPhase({ kind: "busy", label: "Gerando prévia da primeira página…" });
+        try {
+          const previewBlob = await renderScorePreview(file);
+          const objectUrl = URL.createObjectURL(previewBlob);
+          if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+          setLocalPreviewUrl(objectUrl);
+
+          setPhase({ kind: "busy", label: "Enviando prévia da grade…" });
+          const { error: previewError } = await supabase.storage
+            .from(ARRANGEMENTS_BUCKET)
+            .upload(`${folder}/${PREVIEW_FILE_NAME}`, previewBlob, {
+              upsert: true,
+              contentType: "image/jpeg",
+              cacheControl: "3600",
+            });
+
+          if (previewError) {
+            await attachWorkFiles(saved.id, uploaded, "rascunho", { previewUploaded: false });
+            setPhase({ kind: "idle" });
+            const message =
+              "A grade subiu, mas a prévia da primeira página falhou. Reenvie a grade para gerar a prévia.";
+            setErrors({ score: message, preview: message });
+            setFormError(message);
+            if (!work) router.replace(`/arranjador/obras/${saved.id}`);
+            return;
+          }
+          previewUploaded = true;
+        } catch (error) {
+          await attachWorkFiles(saved.id, uploaded, "rascunho", { previewUploaded: false });
+          setPhase({ kind: "idle" });
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Não foi possível gerar a prévia da grade. Reenvie o PDF.";
+          setErrors({ score: message, preview: message });
+          setFormError(message);
+          if (!work) router.replace(`/arranjador/obras/${saved.id}`);
+          return;
+        }
+      }
     }
 
     setPhase({ kind: "busy", label: "Registrando arquivos…" });
-    const attached = await attachWorkFiles(saved.id, uploaded, intent);
+    const attached = await attachWorkFiles(saved.id, uploaded, intent, { previewUploaded });
     if (!attached.ok) {
       setPhase({ kind: "idle" });
       setErrors(attached.fieldErrors ?? {});
@@ -205,6 +267,7 @@ export function WorkForm({ userId, work, files }: WorkFormProps) {
   const durationMinutes = work ? String(Math.floor(work.duration_seconds / 60)) : "";
   const durationSeconds = work ? String(work.duration_seconds % 60) : "";
   const inReview = work?.status === "em_revisao";
+  const youtubeDefault = work?.preview_video_id ? youtubeWatchUrl(work.preview_video_id) : "";
 
   return (
     <form noValidate onSubmit={handleSubmit} className="grid gap-10 lg:grid-cols-12">
@@ -214,6 +277,11 @@ export function WorkForm({ userId, work, files }: WorkFormProps) {
         {readOnly ? (
           <FormAlert tone="success">
             Esta obra está publicada no acervo. Alterações passam pela curadoria: escreva para contato@moa.art.br.
+          </FormAlert>
+        ) : null}
+        {work?.status === "rascunho" && work.review_note ? (
+          <FormAlert>
+            A curadoria devolveu esta obra: {work.review_note}
           </FormAlert>
         ) : null}
         {formError ? <FormAlert>{formError}</FormAlert> : null}
@@ -385,6 +453,29 @@ export function WorkForm({ userId, work, files }: WorkFormProps) {
             className={`${inputClass} min-h-32 py-3 leading-relaxed ${borderFor(errors.description)}`}
           />
         </Field>
+
+        <Field
+          id="obra-youtube"
+          label="Vídeo no YouTube"
+          error={errors.youtubeUrl}
+          hint="Opcional. Link de watch, youtu.be, shorts ou embed. Aparece na ficha do acervo."
+        >
+          <input
+            id="obra-youtube"
+            name="youtubeUrl"
+            type="url"
+            inputMode="url"
+            defaultValue={youtubeDefault}
+            placeholder="https://www.youtube.com/watch?v=…"
+            aria-invalid={Boolean(errors.youtubeUrl)}
+            aria-describedby={describedBy(
+              "obra-youtube",
+              errors.youtubeUrl,
+              "Opcional. Link de watch, youtu.be, shorts ou embed. Aparece na ficha do acervo.",
+            )}
+            className={`${inputClass} ${borderFor(errors.youtubeUrl)}`}
+          />
+        </Field>
       </fieldset>
 
       <div className="grid content-start gap-6 lg:col-span-5">
@@ -405,11 +496,24 @@ export function WorkForm({ userId, work, files }: WorkFormProps) {
                 accept={accept}
                 existingUrl={files[slot]}
                 file={selected[slot]}
-                error={errors[slot]}
+                error={errors[slot] ?? (slot === "score" ? errors.preview : undefined)}
                 onPick={(file) => pickFile(slot, file)}
               />
             ))}
           </ul>
+
+          {previewUrl ? (
+            <div className="mt-6 border-t border-staff pt-6">
+              <p className="text-sm font-medium text-charcoal">Prévia da primeira página</p>
+              <p className="mt-1 text-sm text-muted">É o que o comprador vê no acervo antes da aquisição.</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewUrl}
+                alt="Prévia da primeira página da grade"
+                className="mt-4 w-full rounded-sm border border-staff bg-white object-contain shadow-[0_18px_40px_-34px_rgba(45,45,45,0.4)]"
+              />
+            </div>
+          ) : null}
         </fieldset>
 
         {readOnly ? null : (
