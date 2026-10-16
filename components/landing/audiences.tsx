@@ -105,7 +105,7 @@ export function Audiences() {
               <FeatureList features={arrangerFeatures} tone="dark" />
             </div>
             <a
-              href="#interesse"
+              href="/arranjador/cadastro"
               className="mt-10 inline-flex min-h-12 items-center rounded-md border border-copper px-5 text-sm font-medium text-copper transition duration-300 hover:bg-copper hover:text-charcoal active:scale-[0.98]"
             >
               Quero publicar minhas obras

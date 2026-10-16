@@ -29,6 +29,11 @@ export function SiteFooter() {
                 Lista de abertura
               </a>
             </li>
+            <li>
+              <a href="/arranjador/entrar" className="inline-flex min-h-10 items-center text-ink hover:text-copper-deep">
+                Entrar no estúdio
+              </a>
+            </li>
           </ul>
         </nav>
 

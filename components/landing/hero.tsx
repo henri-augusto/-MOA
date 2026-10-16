@@ -49,7 +49,7 @@ export function Hero() {
             />
           </a>
           <a
-            href="#arranjadores"
+            href="/arranjador/cadastro"
             className="inline-flex min-h-12 items-center justify-center rounded-md border border-charcoal px-6 text-sm font-medium text-charcoal transition duration-300 hover:bg-charcoal hover:text-paper-soft active:scale-[0.98]"
           >
             Sou arranjador

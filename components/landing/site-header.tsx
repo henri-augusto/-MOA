@@ -27,7 +27,7 @@ export function SiteHeader() {
 
         <div className="hidden items-center gap-3 md:flex">
           <a
-            href="#arranjadores"
+            href="/arranjador/cadastro"
             className="inline-flex min-h-11 items-center rounded-md border border-charcoal px-4 text-sm font-medium text-charcoal transition duration-300 hover:bg-charcoal hover:text-paper-soft active:scale-[0.98]"
           >
             Publicar obra

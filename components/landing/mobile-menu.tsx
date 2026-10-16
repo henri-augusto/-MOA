@@ -70,7 +70,7 @@ export function MobileMenu() {
             Adquirir obra
           </a>
           <a
-            href="#arranjadores"
+            href="/arranjador/cadastro"
             onClick={close}
             className="inline-flex min-h-12 items-center justify-center rounded-md border border-charcoal text-sm font-medium text-charcoal"
           >

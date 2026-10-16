@@ -1,12 +1,17 @@
 type LogoProps = {
   withTagline?: boolean;
+  tone?: "light" | "dark";
   className?: string;
 };
 
-export function Logo({ withTagline = false, className = "" }: LogoProps) {
+export function Logo({ withTagline = false, tone = "light", className = "" }: LogoProps) {
+  const wordmark = tone === "dark" ? "text-paper-soft" : "text-charcoal";
+
   return (
     <span className={`inline-flex flex-col leading-none ${className}`}>
-      <span className="relative inline-block self-start pr-4 font-playfair text-[1.65rem] font-medium tracking-[0.04em] text-charcoal">
+      <span
+        className={`relative inline-block self-start pr-4 font-playfair text-[1.65rem] font-medium tracking-[0.04em] ${wordmark}`}
+      >
         MOA
         <svg
           aria-hidden="true"
@@ -23,7 +28,9 @@ export function Logo({ withTagline = false, className = "" }: LogoProps) {
         </svg>
       </span>
       {withTagline ? (
-        <span className="mt-2 text-[0.62rem] font-medium uppercase tracking-[0.28em] text-muted">
+        <span
+          className={`mt-2 text-[0.62rem] font-medium uppercase tracking-[0.28em] ${tone === "light" ? "text-muted" : "text-[#A9A294]"}`}
+        >
           Master of Arrangement
         </span>
       ) : null}
