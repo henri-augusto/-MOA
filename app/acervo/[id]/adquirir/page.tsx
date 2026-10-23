@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { AcquireFlow } from "@/components/marketplace/acquire-flow";
 import { PreviewNote } from "@/components/marketplace/preview-note";
 import { getPublishedWork } from "@/lib/marketplace/catalog";
+import { isPaymentsReady } from "@/lib/payments/env";
 
 export async function generateMetadata({
   params,
@@ -22,11 +23,13 @@ async function Acquire({ params }: { params: Promise<{ id: string }> }) {
   const listing = await getPublishedWork(id);
   if (!listing) notFound();
 
+  const paymentsEnabled = isPaymentsReady();
+
   return (
     <>
-      <PreviewNote />
-      <div className="mt-10">
-        <AcquireFlow listing={listing} />
+      {paymentsEnabled ? null : <PreviewNote />}
+      <div className={paymentsEnabled ? undefined : "mt-10"}>
+        <AcquireFlow listing={listing} paymentsEnabled={paymentsEnabled} />
       </div>
     </>
   );

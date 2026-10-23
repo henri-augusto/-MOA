@@ -66,9 +66,28 @@ function ProfileNudge({ profile }: { profile: Pick<Profile, "artist_name" | "bio
   );
 }
 
+function PayoutsNudge({ ready }: { ready: boolean }) {
+  if (ready) return null;
+
+  return (
+    <div className="flex flex-col justify-between gap-4 rounded-md border border-copper bg-white p-6 md:flex-row md:items-center">
+      <div>
+        <p className="font-medium text-charcoal">Cadastre onde receber o repasse.</p>
+        <p className="mt-1 text-sm text-muted">
+          Sem a conta bancária no Stripe, as obras publicadas ficam indisponíveis para compra no acervo.
+        </p>
+      </div>
+      <Link href="/arranjador/recebimentos" className={`${secondaryButtonClass} shrink-0`}>
+        Abrir recebimentos
+      </Link>
+    </div>
+  );
+}
+
 function FirstSteps() {
   const steps = [
     { title: "Complete o perfil", text: "Nome artístico, cidade e as formações que você atende.", href: "/arranjador/perfil" },
+    { title: "Cadastre o recebimento", text: "Conta bancária no Stripe para receber o repasse de cada venda.", href: "/arranjador/recebimentos" },
     { title: "Cadastre uma obra", text: "Dados do arranjo, grade, partes e áudio de referência.", href: "/arranjador/obras/nova" },
     { title: "Envie para revisão", text: "A curadoria confere o material e publica no acervo.", href: "/arranjador/obras" },
   ];
@@ -79,7 +98,7 @@ function FirstSteps() {
       <h2 id="primeiros-passos" className="mt-4 max-w-[24ch] font-playfair text-2xl text-paper-soft md:text-3xl">
         Três passos até o seu primeiro arranjo no acervo.
       </h2>
-      <ol className="mt-10 grid gap-px overflow-hidden rounded-md bg-white/10 md:grid-cols-3">
+      <ol className="mt-10 grid gap-px overflow-hidden rounded-md bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
         {steps.map((step, index) => (
           <li key={step.title} className="bg-charcoal">
             <Link
@@ -171,7 +190,11 @@ async function Overview() {
   const { supabase, userId } = await requireArranger();
 
   const [profileResult, dailyResult, metricsResult] = await Promise.all([
-    supabase.from("profiles").select("artist_name, bio, formations").eq("id", userId).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("artist_name, bio, formations, payouts_ready")
+      .eq("id", userId)
+      .maybeSingle(),
     supabase.rpc("arranger_daily_accesses", { p_days: PERIOD_DAYS }),
     supabase.rpc("arranger_work_metrics", { p_days: PERIOD_DAYS }),
   ]);
@@ -184,7 +207,10 @@ async function Overview() {
     );
   }
 
-  const profile = profileResult.data as Pick<Profile, "artist_name" | "bio" | "formations"> | null;
+  const profile = profileResult.data as
+    | (Pick<Profile, "artist_name" | "bio" | "formations"> & { payouts_ready?: boolean })
+    | null;
+  const payoutsReady = Boolean(profile?.payouts_ready);
   const works = ((metricsResult.data ?? []) as WorkMetricsRow[]).map((row) => ({
     ...row,
     page_views: Number(row.page_views),
@@ -198,6 +224,7 @@ async function Overview() {
   if (works.length === 0) {
     return (
       <div className="grid gap-6">
+        <PayoutsNudge ready={payoutsReady} />
         <ProfileNudge profile={profile} />
         <FirstSteps />
       </div>
@@ -228,6 +255,7 @@ async function Overview() {
 
   return (
     <div className="grid gap-6">
+      <PayoutsNudge ready={payoutsReady} />
       <ProfileNudge profile={profile} />
 
       {noActivity ? (

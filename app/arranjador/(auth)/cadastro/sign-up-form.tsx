@@ -24,8 +24,9 @@ export function SignUpForm() {
         <EnvelopeSimpleIcon size={34} weight="light" className="text-copper" aria-hidden="true" />
         <p className="mt-5 font-playfair text-2xl text-charcoal">Confirme seu e-mail.</p>
         <p className="mt-3 leading-relaxed text-muted">
-          Enviamos um link para <span className="font-medium text-ink">{state.confirmEmailSentTo}</span>. Ao
-          abrir, você volta direto para completar o perfil.
+          Se <span className="font-medium text-ink">{state.confirmEmailSentTo}</span> ainda não tiver conta,
+          enviamos um link para confirmar. Se a conta já existir, entre com sua senha. Ao abrir o link, você volta
+          direto para completar o perfil.
         </p>
       </div>
     );
@@ -71,9 +72,24 @@ export function SignUpForm() {
           type="password"
           autoComplete="new-password"
           minLength={8}
+          maxLength={128}
           aria-invalid={Boolean(errors.password)}
           aria-describedby={describedBy("cadastro-senha", errors.password, passwordHint)}
           className={`${inputClass} ${borderFor(errors.password)}`}
+        />
+      </Field>
+
+      <Field id="cadastro-senha-confirmacao" label="Confirmar senha" error={errors.passwordConfirmation}>
+        <input
+          id="cadastro-senha-confirmacao"
+          name="passwordConfirmation"
+          type="password"
+          autoComplete="new-password"
+          minLength={8}
+          maxLength={128}
+          aria-invalid={Boolean(errors.passwordConfirmation)}
+          aria-describedby={describedBy("cadastro-senha-confirmacao", errors.passwordConfirmation)}
+          className={`${inputClass} ${borderFor(errors.passwordConfirmation)}`}
         />
       </Field>
 

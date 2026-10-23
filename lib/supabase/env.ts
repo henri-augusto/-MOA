@@ -15,10 +15,13 @@ export function supabaseEnv() {
   return { url, publishableKey };
 }
 
+export function supabaseServiceRoleKey() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) {
+    throw new Error("Supabase não configurado: defina SUPABASE_SERVICE_ROLE_KEY em .env.local.");
+  }
+  return key;
+}
+
 export const ARRANGEMENTS_BUCKET = "arrangements";
 export const PREVIEWS_BUCKET = "previews";
-
-export function publicPreviewUrl(workId: string) {
-  const { url } = supabaseEnv();
-  return `${url}/storage/v1/object/public/${PREVIEWS_BUCKET}/${workId}.jpg`;
-}

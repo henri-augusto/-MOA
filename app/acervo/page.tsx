@@ -40,23 +40,17 @@ async function CatalogSection() {
 export default function AcervoPage() {
   return (
     <>
-      <header className="grid items-end gap-8 lg:grid-cols-12">
-        <div className="lg:col-span-7">
-          <h1 className="max-w-[16ch] font-playfair text-4xl leading-[1.05] text-charcoal md:text-6xl">
-            Partituras para a estante.
-          </h1>
+      <header className="border-b border-staff pb-8 md:pb-10">
+        <p className="text-xs font-medium tracking-[0.2em] text-muted uppercase">Loja de partituras</p>
+        <h1 className="mt-4 max-w-[18ch] font-playfair text-4xl leading-[1.05] text-charcoal md:text-6xl">
+          Acervo MOA
+        </h1>
+        <div className="mt-6">
+          <PreviewNote />
         </div>
-        <p className="max-w-[42ch] text-base leading-relaxed text-muted lg:col-span-4 lg:col-start-9">
-          Escolha o arranjo, confira a primeira página e adquira uma vez. Grade, partes cavadas e áudio de
-          referência, sem mensalidade.
-        </p>
       </header>
 
-      <div className="mt-8">
-        <PreviewNote />
-      </div>
-
-      <div className="mt-12">
+      <div className="mt-2">
         <Suspense fallback={<SectionSkeleton rows={3} />}>
           <CatalogSection />
         </Suspense>

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { EnsurePublicPreview } from "@/components/marketplace/ensure-public-preview";
 import { PageHeader, SectionSkeleton } from "@/components/studio/page-header";
 import { StatusBadge } from "@/components/studio/status-badge";
 import type { Work } from "@/lib/arranger/catalog";
@@ -65,9 +64,6 @@ async function EditWork({ params }: { params: Promise<{ id: string }> }) {
       <div className="mt-10">
         <WorkForm key={work.updated_at} userId={userId} work={work} files={files} />
       </div>
-      {work.status === "publicado" && (files.score || files.preview) ? (
-        <EnsurePublicPreview workId={work.id} scoreUrl={files.score} previewUrl={files.preview} />
-      ) : null}
       {work.status === "rascunho" ? (
         <div className="mt-16 border-t border-staff pt-8">
           <DeleteWorkButton workId={work.id} title={work.title} />

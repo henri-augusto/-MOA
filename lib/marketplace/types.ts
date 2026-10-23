@@ -12,4 +12,6 @@ export type Listing = {
   description: string;
   previewVideoId: string | null;
   hasPreview: boolean;
+  hasAudio: boolean;
+  canPurchase: boolean;
 };

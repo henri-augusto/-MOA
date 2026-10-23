@@ -1,9 +1,13 @@
 "use client";
 
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { LockIcon } from "@phosphor-icons/react/dist/csr/Lock";
 import { SealCheckIcon } from "@phosphor-icons/react/dist/csr/SealCheck";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { createCheckout } from "@/app/acervo/[id]/adquirir/actions";
+import { PaymentUnavailable } from "@/components/marketplace/payment-form";
 import {
   borderFor,
   describedBy,
@@ -11,13 +15,11 @@ import {
   Field,
   inputClass,
   primaryButtonClass,
-  secondaryButtonClass,
 } from "@/components/studio/form";
 import { formatBRL } from "@/lib/arranger/catalog";
 import type { Listing } from "@/lib/marketplace/types";
 
 type Step = "dados" | "pagamento" | "confirmacao";
-type Method = "cartao" | "pix";
 
 type Buyer = {
   name: string;
@@ -30,6 +32,12 @@ type Errors = Partial<Record<keyof Buyer, string>>;
 
 const emptyBuyer: Buyer = { name: "", email: "", ensemble: "", accepted: false };
 
+const steps: { id: Step; label: string }[] = [
+  { id: "dados", label: "Seus dados" },
+  { id: "pagamento", label: "Pagamento" },
+  { id: "confirmacao", label: "Confirmação" },
+];
+
 function validate(buyer: Buyer): Errors {
   const errors: Errors = {};
   if (buyer.name.trim().length < 3) errors.name = "Informe o nome de quem adquire.";
@@ -41,11 +49,56 @@ function validate(buyer: Buyer): Errors {
   return errors;
 }
 
-export function AcquireFlow({ listing }: { listing: Listing }) {
+function OrderSummary({
+  listing,
+  price,
+  compact = false,
+}: {
+  listing: Listing;
+  price: string;
+  compact?: boolean;
+}) {
+  return (
+    <aside className="rounded-md border border-staff bg-white p-5 md:p-6">
+      <p className="text-xs font-medium tracking-[0.2em] text-muted uppercase">Resumo do pedido</p>
+      <div className={compact ? "mt-3" : "mt-4"}>
+        <h2 className="font-playfair text-xl text-charcoal md:text-2xl">{listing.title}</h2>
+        <p className="mt-1 text-sm text-ink">{listing.composer}</p>
+        <p className="text-sm text-muted">arr. {listing.arranger}</p>
+        <p className="mt-2 text-xs tracking-[0.14em] text-muted uppercase">{listing.formation}</p>
+      </div>
+
+      <dl className="mt-6 divide-y divide-staff border-y border-staff text-sm">
+        <div className="flex items-center justify-between gap-4 py-3">
+          <dt className="text-ink">Grade, partes e áudio</dt>
+          <dd className="font-semibold tabular-nums text-charcoal">{price}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-4 py-3">
+          <dt className="font-medium text-charcoal">Total</dt>
+          <dd className="text-lg font-semibold tabular-nums text-charcoal">{price}</dd>
+        </div>
+      </dl>
+      <p className="mt-4 flex items-start gap-2 text-sm leading-relaxed text-muted">
+        <LockIcon size={16} weight="light" className="mt-0.5 shrink-0" aria-hidden="true" />
+        Pagamento único e seguro. A obra fica com o conjunto, sem mensalidade.
+      </p>
+    </aside>
+  );
+}
+
+export function AcquireFlow({
+  listing,
+  paymentsEnabled,
+}: {
+  listing: Listing;
+  paymentsEnabled: boolean;
+}) {
   const [step, setStep] = useState<Step>("dados");
-  const [method, setMethod] = useState<Method>("cartao");
   const [buyer, setBuyer] = useState<Buyer>(emptyBuyer);
   const [errors, setErrors] = useState<Errors>({});
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
@@ -54,6 +107,8 @@ export function AcquireFlow({ listing }: { listing: Listing }) {
   const opened = useRef(false);
   const baseId = useId();
   const price = formatBRL(listing.priceCents);
+  const stepIndex = steps.findIndex((item) => item.id === step);
+  const canBuy = paymentsEnabled && listing.canPurchase;
 
   useEffect(() => {
     if (!opened.current) {
@@ -68,15 +123,50 @@ export function AcquireFlow({ listing }: { listing: Listing }) {
     setErrors((current) => ({ ...current, [key]: undefined }));
   }
 
-  function continueToPayment(event: FormEvent<HTMLFormElement>) {
+  async function continueToPayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const next = validate(buyer);
     setErrors(next);
-    if (next.name) firstFieldRef.current?.focus();
-    else if (next.email) emailRef.current?.focus();
-    else if (next.ensemble) ensembleRef.current?.focus();
-    else if (next.accepted) acceptedRef.current?.focus();
-    else setStep("pagamento");
+    if (next.name) {
+      firstFieldRef.current?.focus();
+      return;
+    }
+    if (next.email) {
+      emailRef.current?.focus();
+      return;
+    }
+    if (next.ensemble) {
+      ensembleRef.current?.focus();
+      return;
+    }
+    if (next.accepted) {
+      acceptedRef.current?.focus();
+      return;
+    }
+
+    if (!canBuy) {
+      setCheckoutError(null);
+      setStep("pagamento");
+      return;
+    }
+
+    setCheckoutBusy(true);
+    setCheckoutError(null);
+    const result = await createCheckout({
+      workId: listing.id,
+      name: buyer.name,
+      email: buyer.email,
+      ensemble: buyer.ensemble,
+      accepted: buyer.accepted,
+    });
+
+    if (!result.ok) {
+      setCheckoutBusy(false);
+      setCheckoutError(result.error);
+      return;
+    }
+
+    window.location.assign(result.url);
   }
 
   return (
@@ -86,20 +176,83 @@ export function AcquireFlow({ listing }: { listing: Listing }) {
         className="inline-flex min-h-11 items-center gap-2 text-sm text-muted transition-colors duration-300 hover:text-charcoal"
       >
         <ArrowLeftIcon size={16} weight="light" aria-hidden="true" />
-        {listing.title}
+        Voltar à obra
       </Link>
-      <p className="mt-6 text-sm text-muted">
-        {step === "dados" ? "Seus dados" : step === "pagamento" ? "Pagamento" : "Confirmação"}
-      </p>
+
+      <ol className="mt-8 flex flex-wrap gap-2" aria-label="Etapas da aquisição">
+        {steps.map((item, index) => {
+          const current = item.id === step;
+          const done = index < stepIndex;
+          return (
+            <li
+              key={item.id}
+              className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3 text-sm ${
+                current
+                  ? "border-charcoal bg-charcoal text-paper-soft"
+                  : done
+                    ? "border-copper bg-white text-charcoal"
+                    : "border-staff bg-paper-soft text-muted"
+              }`}
+            >
+              <span className="tabular-nums font-semibold">{index + 1}</span>
+              <span>{item.label}</span>
+            </li>
+          );
+        })}
+      </ol>
+
       <h1
         ref={headingRef}
         tabIndex={-1}
-        className="mt-3 max-w-[22ch] scroll-mt-28 text-balance font-playfair text-4xl leading-tight text-charcoal outline-none md:text-5xl"
+        className="mt-6 max-w-[22ch] scroll-mt-28 text-balance font-playfair text-4xl leading-tight text-charcoal outline-none md:text-5xl"
       >
         {step === "confirmacao" ? "Ensaio concluído." : `Adquirir ${listing.title}`}
       </h1>
+      <p className="mt-3 max-w-[48ch] text-sm leading-relaxed text-muted">
+        {step === "dados"
+          ? canBuy
+            ? "Informe quem adquire. O pagamento abre na página do Stripe."
+            : "Informe quem adquire. Não é preciso criar conta nesta etapa."
+          : step === "pagamento"
+            ? paymentsEnabled && !listing.canPurchase
+              ? "O arranjador ainda não concluiu o cadastro de recebimento."
+              : "O pagamento com Stripe ainda não está ligado neste ambiente."
+            : "Quando o Stripe estiver ligado, esta tela confirma a compra e libera os PDFs."}
+      </p>
 
-      <div className="mt-10 grid items-start gap-12 lg:grid-cols-12">
+      {!listing.canPurchase && paymentsEnabled ? (
+        <p className="mt-4 max-w-[52ch] rounded-md border border-copper bg-white px-4 py-3 text-sm text-ink">
+          O arranjador ainda não concluiu o cadastro de recebimento. A compra fica bloqueada até lá.
+        </p>
+      ) : null}
+
+      {step !== "confirmacao" ? (
+        <div className="mt-8 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setSummaryOpen((open) => !open)}
+            className="flex w-full min-h-12 items-center justify-between rounded-md border border-staff bg-white px-4 text-sm font-medium text-charcoal"
+            aria-expanded={summaryOpen}
+          >
+            <span>
+              Resumo · <span className="tabular-nums">{price}</span>
+            </span>
+            <CaretDownIcon
+              size={16}
+              weight="bold"
+              aria-hidden="true"
+              className={`transition-transform ${summaryOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+          {summaryOpen ? (
+            <div className="mt-3">
+              <OrderSummary listing={listing} price={price} compact />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-10 grid items-start gap-10 lg:grid-cols-12 lg:gap-12">
         <div className="order-2 lg:order-1 lg:col-span-7">
           {step === "dados" ? (
             <form className="grid gap-6" onSubmit={continueToPayment} noValidate>
@@ -180,74 +333,25 @@ export function AcquireFlow({ listing }: { listing: Listing }) {
                 ) : null}
               </div>
 
-              <button type="submit" className={`${primaryButtonClass} w-full sm:w-auto`}>
-                Seguir para o pagamento
+              {checkoutError ? <p className={errorTextClass}>{checkoutError}</p> : null}
+
+              <button type="submit" disabled={checkoutBusy} className={`${primaryButtonClass} w-full sm:w-auto`}>
+                {checkoutBusy ? "Abrindo o checkout…" : canBuy ? "Ir para o checkout" : "Seguir para o pagamento"}
               </button>
             </form>
           ) : null}
 
           {step === "pagamento" ? (
-            <div>
-              <fieldset>
-                <legend className="text-sm font-medium text-charcoal">Forma de pagamento</legend>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {(
-                    [
-                      ["cartao", "Cartão"],
-                      ["pix", "Pix"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <label
-                      key={value}
-                      className="flex min-h-12 cursor-pointer items-center gap-3 rounded-md border border-staff px-4 text-sm text-ink transition-colors duration-300 has-checked:border-charcoal has-checked:bg-white has-checked:font-semibold has-checked:text-charcoal"
-                    >
-                      <input
-                        type="radio"
-                        name="pagamento"
-                        value={value}
-                        checked={method === value}
-                        onChange={() => setMethod(value)}
-                        className="size-4 accent-charcoal"
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-
-              <div className="mt-6 rounded-md border border-dashed border-staff bg-paper-soft px-5 py-6 md:px-6">
-                <p className="text-sm font-medium text-charcoal">Campo do Stripe</p>
-                <p className="mt-2 max-w-[52ch] text-sm leading-relaxed text-muted">
-                  {method === "cartao"
-                    ? "Número, validade e CVC aparecem aqui, no componente seguro do Stripe. O MOA não vê nem guarda o cartão."
-                    : "O QR Code do Pix aparece aqui, gerado pelo Stripe, depois que a aquisição for confirmada."}
-                </p>
-                <button type="button" disabled className={`mt-6 ${primaryButtonClass}`}>
-                  Pagar {price}
-                </button>
-                <p className="mt-3 max-w-[52ch] text-sm leading-relaxed text-muted">
-                  Este botão liga quando o Stripe estiver conectado. Nada é cobrado agora.
-                </p>
-              </div>
-
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <button type="button" onClick={() => setStep("confirmacao")} className={secondaryButtonClass}>
-                  Ver a confirmação
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStep("dados")}
-                  className="inline-flex min-h-12 items-center justify-center px-2 text-sm text-muted hover:text-charcoal"
-                >
-                  Voltar aos dados
-                </button>
-              </div>
-            </div>
+            <PaymentUnavailable
+              priceLabel={price}
+              onPreviewConfirm={() => setStep("confirmacao")}
+              onBack={() => setStep("dados")}
+            />
           ) : null}
 
           {step === "confirmacao" ? (
             <div>
-              <div className="flex items-start gap-4">
+              <div className="flex items-start gap-4 rounded-md border border-staff bg-white p-5 md:p-6">
                 <SealCheckIcon size={28} weight="light" className="mt-1 shrink-0 text-copper" aria-hidden="true" />
                 <p className="max-w-[58ch] text-base leading-relaxed text-ink">
                   Nenhum valor foi cobrado. Quando o Stripe estiver ligado, esta tela confirma a compra de{" "}
@@ -259,25 +363,12 @@ export function AcquireFlow({ listing }: { listing: Listing }) {
                 <Row term="Obra" value={listing.title} />
                 <Row term="Para" value={buyer.ensemble.trim()} />
                 <Row term="Contato" value={`${buyer.name.trim()} · ${buyer.email.trim()}`} />
-                <Row term="Forma escolhida" value={method === "cartao" ? "Cartão" : "Pix"} />
                 <Row term="Total previsto" value={price} />
               </dl>
 
-              <h2 className="mt-12 font-playfair text-2xl text-charcoal">O que chega com o pagamento</h2>
-              <ul className="mt-4 divide-y divide-staff border-y border-staff text-sm">
-                <li className="flex items-center justify-between gap-4 py-4">
-                  <span className="text-ink">Grade completa</span>
-                  <span className="text-muted">PDF após o pagamento</span>
-                </li>
-                <li className="flex items-center justify-between gap-4 py-4">
-                  <span className="text-ink">{listing.parts} partes cavadas</span>
-                  <span className="text-muted">PDF após o pagamento</span>
-                </li>
-              </ul>
-
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link href="/acervo" className={primaryButtonClass}>
-                  Voltar ao acervo
+                  Continuar comprando
                 </Link>
                 <button
                   type="button"
@@ -292,26 +383,9 @@ export function AcquireFlow({ listing }: { listing: Listing }) {
         </div>
 
         {step === "confirmacao" ? null : (
-          <aside className="order-1 rounded-md border border-staff bg-white p-6 md:p-8 lg:sticky lg:top-28 lg:order-2 lg:col-span-5">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted">{listing.formation}</p>
-            <h2 className="mt-4 font-playfair text-2xl text-charcoal">{listing.title}</h2>
-            <p className="mt-2 text-sm text-ink">{listing.composer}</p>
-            <p className="text-sm text-muted">arr. {listing.arranger}</p>
-
-            <dl className="mt-8 divide-y divide-staff border-y border-staff text-sm">
-              <div className="flex items-center justify-between gap-4 py-3">
-                <dt className="text-ink">Grade, partes e áudio</dt>
-                <dd className="font-semibold tabular-nums text-charcoal">{price}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-4 py-3">
-                <dt className="font-medium text-charcoal">Total</dt>
-                <dd className="font-semibold tabular-nums text-charcoal">{price}</dd>
-              </div>
-            </dl>
-            <p className="mt-4 text-sm leading-relaxed text-muted">
-              Pagamento único. A obra fica com o conjunto, sem mensalidade.
-            </p>
-          </aside>
+          <div className="order-1 hidden lg:sticky lg:top-28 lg:order-2 lg:col-span-5 lg:block">
+            <OrderSummary listing={listing} price={price} />
+          </div>
         )}
       </div>
     </div>

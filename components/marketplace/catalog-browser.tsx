@@ -1,17 +1,18 @@
 "use client";
 
-import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import Link from "next/link";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMemo, useState } from "react";
-import { ScoreSheet } from "@/components/landing/score-sheet";
 import { inputClass, secondaryButtonClass } from "@/components/studio/form";
-import { formatBRL } from "@/lib/arranger/catalog";
+import { FORMATIONS } from "@/lib/arranger/catalog";
 import type { Listing } from "@/lib/marketplace/types";
-import { scoreSystems } from "@/lib/marketplace/score";
-import { LevelMeter } from "./level-meter";
+import { ProductCard } from "./product-card";
 
 type DurationFilter = "todas" | "curta" | "media" | "longa";
+type SortOption = "destaque" | "preco-asc" | "preco-desc" | "titulo" | "nivel";
+
+const SECTION_LIMIT = 6;
 
 function fold(value: string) {
   return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -24,19 +25,58 @@ function matchesDuration(seconds: number, duration: DurationFilter) {
   return true;
 }
 
+function sortListings(list: Listing[], sort: SortOption) {
+  const next = [...list];
+  if (sort === "preco-asc") next.sort((a, b) => a.priceCents - b.priceCents);
+  else if (sort === "preco-desc") next.sort((a, b) => b.priceCents - a.priceCents);
+  else if (sort === "titulo") next.sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
+  else if (sort === "nivel") next.sort((a, b) => a.level - b.level || a.title.localeCompare(b.title, "pt-BR"));
+  return next;
+}
+
+function groupByFormation(list: Listing[]) {
+  const buckets = new Map<string, Listing[]>();
+  for (const work of list) {
+    const bucket = buckets.get(work.formation) ?? [];
+    bucket.push(work);
+    buckets.set(work.formation, bucket);
+  }
+
+  const knownOrder = new Set<string>(FORMATIONS);
+  const sections = FORMATIONS.filter((formation) => buckets.has(formation)).map((formation) => ({
+    formation,
+    works: buckets.get(formation)!,
+  }));
+
+  const extras = [...buckets.keys()]
+    .filter((formation) => !knownOrder.has(formation))
+    .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    .map((formation) => ({
+      formation,
+      works: buckets.get(formation)!,
+    }));
+
+  return [...sections, ...extras];
+}
+
+type ActivePill = { key: string; label: string; clear: () => void };
+
 export function CatalogBrowser({ listings }: { listings: Listing[] }) {
   const [query, setQuery] = useState("");
   const [formation, setFormation] = useState("todas");
   const [level, setLevel] = useState("todos");
   const [duration, setDuration] = useState<DurationFilter>("todas");
+  const [sort, setSort] = useState<SortOption>("destaque");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const formations = useMemo(
-    () => Array.from(new Set(listings.map((work) => work.formation))),
+    () => Array.from(new Set(listings.map((work) => work.formation))).sort((a, b) => a.localeCompare(b, "pt-BR")),
     [listings],
   );
 
   const needle = fold(query.trim());
-  const results = listings.filter((work) => {
+  const filtered = listings.filter((work) => {
     if (formation !== "todas" && work.formation !== formation) return false;
     if (level !== "todos" && work.level > Number(level)) return false;
     if (!matchesDuration(work.durationSeconds, duration)) return false;
@@ -44,9 +84,24 @@ export function CatalogBrowser({ listings }: { listings: Listing[] }) {
     const haystack = fold(`${work.title} ${work.composer} ${work.arranger} ${work.formation}`);
     return haystack.includes(needle);
   });
+  const results = sortListings(filtered, sort);
+  const sections = useMemo(() => groupByFormation(results), [results]);
 
-  const filtering = Boolean(needle) || formation !== "todas" || level !== "todos" || duration !== "todas";
-  const [featured, ...rest] = results;
+  const pills: ActivePill[] = [];
+  if (needle) pills.push({ key: "q", label: `Busca: ${query.trim()}`, clear: () => setQuery("") });
+  if (formation !== "todas") {
+    pills.push({ key: "f", label: formation, clear: () => setFormation("todas") });
+  }
+  if (level !== "todos") {
+    pills.push({ key: "l", label: `Nível até ${level}`, clear: () => setLevel("todos") });
+  }
+  if (duration !== "todas") {
+    const labels = { curta: "Até 4 min", media: "4 a 6 min", longa: "Acima de 6 min" } as const;
+    pills.push({ key: "d", label: labels[duration], clear: () => setDuration("todas") });
+  }
+
+  const filtering = pills.length > 0;
+  const drawerFilterCount = pills.filter((pill) => pill.key !== "q").length;
 
   function clearFilters() {
     setQuery("");
@@ -55,100 +110,254 @@ export function CatalogBrowser({ listings }: { listings: Listing[] }) {
     setDuration("todas");
   }
 
+  function toggleExpanded(name: string) {
+    setExpanded((prev) => ({ ...prev, [name]: !prev[name] }));
+  }
+
+  const filterFields = (
+    <>
+      <label className="grid gap-2 text-sm font-medium text-charcoal">
+        Formação
+        <select value={formation} onChange={(event) => setFormation(event.target.value)} className={inputClass}>
+          <option value="todas">Todas</option>
+          {formations.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="grid gap-2 text-sm font-medium text-charcoal">
+        Nível até
+        <select value={level} onChange={(event) => setLevel(event.target.value)} className={inputClass}>
+          <option value="todos">Qualquer</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+      </label>
+
+      <label className="grid gap-2 text-sm font-medium text-charcoal">
+        Duração
+        <select
+          value={duration}
+          onChange={(event) => setDuration(event.target.value as DurationFilter)}
+          className={inputClass}
+        >
+          <option value="todas">Qualquer</option>
+          <option value="curta">Até 4 minutos</option>
+          <option value="media">De 4 a 6 minutos</option>
+          <option value="longa">Acima de 6 minutos</option>
+        </select>
+      </label>
+    </>
+  );
+
   return (
     <div>
+      <div className="sticky top-[4.75rem] z-20 -mx-4 border-y border-staff bg-paper/95 px-4 py-4 backdrop-blur-md md:-mx-8 md:px-8">
+        <form role="search" className="relative" onSubmit={(event) => event.preventDefault()}>
+          <label htmlFor="acervo-busca" className="sr-only">
+            Buscar no acervo
+          </label>
+          <MagnifyingGlassIcon
+            size={20}
+            weight="light"
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-muted"
+          />
+          <input
+            id="acervo-busca"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Buscar por título, compositor ou arranjador"
+            className={`${inputClass} border-staff pl-12 pr-12 text-base shadow-[0_12px_28px_-24px_rgba(45,45,45,0.45)]`}
+            autoComplete="off"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="absolute top-1/2 right-2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-muted hover:text-charcoal"
+              aria-label="Limpar busca"
+            >
+              <XIcon size={18} weight="light" />
+            </button>
+          ) : null}
+        </form>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setFiltersOpen(true)}
+            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-charcoal px-4 text-sm font-medium text-charcoal lg:hidden"
+          >
+            <FunnelIcon size={16} weight="light" aria-hidden="true" />
+            Filtros
+            {drawerFilterCount > 0 ? (
+              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-copper px-1.5 text-xs font-semibold text-charcoal">
+                {drawerFilterCount}
+              </span>
+            ) : null}
+          </button>
+
+          <p aria-live="polite" className="text-sm text-muted">
+            {results.length === 0
+              ? "Nenhuma obra"
+              : results.length === 1
+                ? "1 obra"
+                : `${results.length} obras`}
+          </p>
+
+          <label className="flex min-h-11 items-center gap-2 text-sm text-charcoal">
+            <span className="text-muted">Ordenar</span>
+            <select
+              value={sort}
+              onChange={(event) => setSort(event.target.value as SortOption)}
+              className="min-h-11 rounded-md border border-staff bg-white px-3 text-sm text-charcoal focus:border-charcoal focus:outline-none"
+            >
+              <option value="destaque">Destaque</option>
+              <option value="preco-asc">Menor preço</option>
+              <option value="preco-desc">Maior preço</option>
+              <option value="titulo">Título A–Z</option>
+              <option value="nivel">Nível</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
       <form
-        role="search"
-        className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_10rem_12rem]"
+        className="mt-6 hidden gap-4 lg:grid lg:grid-cols-3"
         onSubmit={(event) => event.preventDefault()}
       >
-        <label className="grid gap-2 text-sm font-medium text-charcoal xl:col-span-1">
-          Buscar
-          <span className="relative">
-            <MagnifyingGlassIcon
-              size={18}
-              weight="light"
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted"
-            />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Título, compositor, arranjador"
-              className={`${inputClass} pl-10`}
-              autoComplete="off"
-            />
-          </span>
-        </label>
-
-        <label className="grid gap-2 text-sm font-medium text-charcoal">
-          Formação
-          <select value={formation} onChange={(event) => setFormation(event.target.value)} className={inputClass}>
-            <option value="todas">Todas</option>
-            {formations.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="grid gap-2 text-sm font-medium text-charcoal">
-          Nível até
-          <select value={level} onChange={(event) => setLevel(event.target.value)} className={inputClass}>
-            <option value="todos">Qualquer</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-          </select>
-        </label>
-
-        <label className="grid gap-2 text-sm font-medium text-charcoal">
-          Duração
-          <select
-            value={duration}
-            onChange={(event) => setDuration(event.target.value as DurationFilter)}
-            className={inputClass}
-          >
-            <option value="todas">Qualquer</option>
-            <option value="curta">Até 4 minutos</option>
-            <option value="media">De 4 a 6 minutos</option>
-            <option value="longa">Acima de 6 minutos</option>
-          </select>
-        </label>
+        {filterFields}
       </form>
 
-      <div className="mt-8 flex items-center justify-between gap-4">
-        <p aria-live="polite" className="text-sm text-muted">
-          {results.length === 0 ? "Nenhuma obra" : results.length === 1 ? "1 obra" : `${results.length} obras`}
-        </p>
-        {filtering ? (
+      {filtersOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Filtros do acervo">
+          <button
+            type="button"
+            className="absolute inset-0 bg-charcoal/40"
+            aria-label="Fechar filtros"
+            onClick={() => setFiltersOpen(false)}
+          />
+          <div className="absolute inset-y-0 right-0 flex w-[min(100%,22rem)] flex-col bg-paper-soft shadow-[-12px_0_40px_-20px_rgba(45,45,45,0.35)]">
+            <div className="flex items-center justify-between border-b border-staff px-5 py-4">
+              <p className="font-medium text-charcoal">Filtros</p>
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(false)}
+                className="inline-flex size-11 items-center justify-center rounded-md text-charcoal"
+                aria-label="Fechar"
+              >
+                <XIcon size={20} weight="light" />
+              </button>
+            </div>
+            <form
+              className="grid flex-1 content-start gap-4 overflow-y-auto px-5 py-5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setFiltersOpen(false);
+              }}
+            >
+              {filterFields}
+            </form>
+            <div className="grid gap-2 border-t border-staff p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+              {filtering ? (
+                <button type="button" onClick={clearFilters} className={secondaryButtonClass}>
+                  Limpar filtros
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(false)}
+                className="inline-flex min-h-12 items-center justify-center rounded-md bg-copper px-6 text-sm font-semibold text-charcoal"
+              >
+                Ver {results.length === 1 ? "1 obra" : `${results.length} obras`}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pills.length > 0 ? (
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          {pills.map((pill) => (
+            <button
+              key={pill.key}
+              type="button"
+              onClick={pill.clear}
+              className="inline-flex min-h-9 items-center gap-2 rounded-full border border-staff bg-white px-3 text-sm text-charcoal transition-colors hover:border-charcoal"
+            >
+              {pill.label}
+              <XIcon size={12} weight="bold" aria-hidden="true" />
+              <span className="sr-only">Remover filtro</span>
+            </button>
+          ))}
           <button
             type="button"
             onClick={clearFilters}
-            className="min-h-11 text-sm font-medium text-charcoal underline decoration-staff underline-offset-[6px] hover:decoration-copper"
+            className="min-h-9 px-2 text-sm font-medium text-muted underline decoration-staff underline-offset-4 hover:text-charcoal hover:decoration-copper"
           >
-            Limpar filtros
+            Limpar tudo
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      {featured ? (
-        <div className="mt-6 grid items-start gap-10 lg:grid-cols-12">
-          <FeaturedWork work={featured} />
-          {rest.length > 0 ? (
-            <ul className="divide-y divide-staff border-y border-staff lg:col-span-5">
-              {rest.map((work) => (
-                <li key={work.id}>
-                  <WorkRow work={work} />
-                </li>
-              ))}
-            </ul>
-          ) : null}
+      {sections.length > 0 ? (
+        <div className="mt-10 space-y-14">
+          {sections.map((section, sectionIndex) => {
+            const isOpen = Boolean(expanded[section.formation]);
+            const visible = isOpen ? section.works : section.works.slice(0, SECTION_LIMIT);
+            const hasMore = section.works.length > SECTION_LIMIT;
+            const remaining = section.works.length - SECTION_LIMIT;
+
+            return (
+              <section key={section.formation} aria-labelledby={`formacao-${sectionIndex}`}>
+                <div className="flex flex-wrap items-end justify-between gap-3 border-b border-staff pb-3">
+                  <h2
+                    id={`formacao-${sectionIndex}`}
+                    className="font-playfair text-2xl leading-tight text-charcoal md:text-3xl"
+                  >
+                    {section.formation}
+                  </h2>
+                  <p className="text-sm text-muted">
+                    {section.works.length === 1 ? "1 obra" : `${section.works.length} obras`}
+                  </p>
+                </div>
+
+                <ul className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 md:gap-5 xl:grid-cols-4">
+                  {visible.map((work, index) => (
+                    <li key={work.id} className="min-w-0">
+                      <ProductCard work={work} priority={sectionIndex === 0 && index < 4} />
+                    </li>
+                  ))}
+                </ul>
+
+                {hasMore ? (
+                  <div className="mt-6 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(section.formation)}
+                      className={secondaryButtonClass}
+                      aria-expanded={isOpen}
+                    >
+                      {isOpen
+                        ? "Mostrar menos"
+                        : remaining === 1
+                          ? "Ver mais 1 obra"
+                          : `Ver mais ${remaining} obras`}
+                    </button>
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
         </div>
       ) : (
-        <div className="mt-6 rounded-md border border-dashed border-staff bg-paper-soft px-6 py-16 text-center">
+        <div className="mt-8 rounded-md border border-dashed border-staff bg-paper-soft px-6 py-16 text-center">
           <p className="font-playfair text-2xl text-charcoal">Nenhuma obra com esses filtros.</p>
           <p className="mx-auto mt-3 max-w-[42ch] leading-relaxed text-muted">
             Alargue o nível, a duração ou limpe a busca para voltar ao acervo.
@@ -159,97 +368,5 @@ export function CatalogBrowser({ listings }: { listings: Listing[] }) {
         </div>
       )}
     </div>
-  );
-}
-
-function FeaturedWork({ work }: { work: Listing }) {
-  return (
-    <article className="lg:col-span-7">
-      <Link
-        href={`/acervo/${work.id}`}
-        className="group block overflow-hidden rounded-md border border-staff bg-white shadow-[0_18px_40px_-34px_rgba(45,45,45,0.4)] transition duration-500 ease-gallery hover:-translate-y-1 hover:shadow-[0_28px_60px_-36px_rgba(45,45,45,0.45)]"
-      >
-        <div aria-hidden="true" className="h-64 overflow-hidden border-b border-staff bg-white sm:h-72">
-          <ScoreSheet
-            className="h-auto w-full"
-            title={work.title}
-            subtitle={work.formation}
-            composer={work.composer}
-            arranger={work.arranger}
-            systems={scoreSystems(work.id)}
-          />
-        </div>
-        <div className="p-7 md:p-8">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted">{work.formation}</p>
-          <h2 className="mt-5 font-playfair text-3xl leading-tight text-charcoal">{work.title}</h2>
-          <p className="mt-2 text-sm text-ink">{work.composer}</p>
-          <p className="text-sm text-muted">arr. {work.arranger}</p>
-          <WorkFacts work={work} />
-          <div className="mt-6 flex items-center justify-between gap-4">
-            <p className="text-lg font-semibold tabular-nums text-charcoal">{formatBRL(work.priceCents)}</p>
-            <span className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-charcoal underline decoration-staff underline-offset-[6px] group-hover:decoration-copper">
-              Ver obra
-              <ArrowRightIcon
-                size={16}
-                weight="light"
-                aria-hidden="true"
-                className="transition-transform duration-300 ease-gallery group-hover:translate-x-1"
-              />
-            </span>
-          </div>
-        </div>
-      </Link>
-    </article>
-  );
-}
-
-function WorkRow({ work }: { work: Listing }) {
-  return (
-    <Link
-      href={`/acervo/${work.id}`}
-      className="group grid gap-4 py-6 transition-colors duration-300 hover:bg-paper-soft md:grid-cols-[1fr_auto] md:items-center md:px-2"
-    >
-      <span className="min-w-0">
-        <span className="text-xs font-medium uppercase tracking-[0.2em] text-muted">{work.formation}</span>
-        <span className="mt-2 block truncate font-playfair text-2xl text-charcoal">{work.title}</span>
-        <span className="mt-1 block text-sm text-ink">
-          {work.composer}
-          <span className="text-muted"> · arr. {work.arranger}</span>
-        </span>
-        <span className="mt-2 block text-sm tabular-nums text-muted">
-          Nível {work.level} · {work.durationLabel} · {work.parts} partes
-        </span>
-      </span>
-      <span className="flex items-center justify-between gap-6 md:justify-end">
-        <span className="font-semibold tabular-nums text-charcoal">{formatBRL(work.priceCents)}</span>
-        <ArrowRightIcon
-          size={18}
-          weight="light"
-          aria-hidden="true"
-          className="shrink-0 text-muted transition-transform duration-300 ease-gallery group-hover:translate-x-1 group-hover:text-charcoal"
-        />
-      </span>
-    </Link>
-  );
-}
-
-function WorkFacts({ work }: { work: Listing }) {
-  return (
-    <dl className="mt-8 grid grid-cols-3 gap-4 border-t border-staff pt-5 text-sm">
-      <div>
-        <dt className="text-xs text-muted">Nível</dt>
-        <dd className="mt-2">
-          <LevelMeter level={work.level} />
-        </dd>
-      </div>
-      <div>
-        <dt className="text-xs text-muted">Duração</dt>
-        <dd className="mt-1 tabular-nums text-ink">{work.durationLabel}</dd>
-      </div>
-      <div>
-        <dt className="text-xs text-muted">Partes</dt>
-        <dd className="mt-1 tabular-nums text-ink">{work.parts}</dd>
-      </div>
-    </dl>
   );
 }

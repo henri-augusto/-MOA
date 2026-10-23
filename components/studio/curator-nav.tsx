@@ -1,16 +1,21 @@
 "use client";
 
 import type { Icon } from "@phosphor-icons/react/dist/lib/types";
+import { HouseSimpleIcon } from "@phosphor-icons/react/dist/csr/HouseSimple";
 import { QueueIcon } from "@phosphor-icons/react/dist/csr/Queue";
+import { ReceiptIcon } from "@phosphor-icons/react/dist/csr/Receipt";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links: { href: string; label: string; icon: Icon }[] = [
+  { href: "/arranjador", label: "Estúdio", icon: HouseSimpleIcon },
   { href: "/curadoria", label: "Fila", icon: QueueIcon },
+  { href: "/curadoria/pedidos", label: "Pedidos", icon: ReceiptIcon },
 ];
 
 function isActive(href: string, pathname: string | null) {
   if (!pathname) return false;
+  if (href === "/arranjador") return pathname === href || pathname.startsWith("/arranjador/");
   if (href === "/curadoria") return pathname === href || pathname.startsWith("/curadoria/obras");
   return pathname === href || pathname.startsWith(`${href}/`);
 }

@@ -1,8 +1,8 @@
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr/ArrowRight";
-import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr/SealCheck";
 import Link from "next/link";
+import { Suspense } from "react";
+import { HeroScore, HeroScoreSkeleton } from "./hero-score";
 import { Baton } from "./logo";
-import { ScoreSheet } from "./score-sheet";
 
 const formations = ["Orquestras", "Bandas sinfônicas", "Coros", "Grupos de câmara"];
 
@@ -78,27 +78,9 @@ export function Hero() {
           aria-hidden="true"
           className="absolute inset-0 hidden translate-x-6 translate-y-5 rotate-[3deg] rounded-sm border border-staff bg-paper-soft md:block"
         />
-        <div
-          className="animate-rise relative overflow-hidden rounded-sm border border-staff bg-white shadow-[0_30px_80px_-40px_rgba(45,45,45,0.45)] md:-rotate-[1.5deg]"
-          style={{ animationDelay: "200ms" }}
-        >
-          <ScoreSheet className="h-auto w-full" />
-        </div>
-
-        <div
-          className="animate-rise absolute -bottom-8 left-4 flex items-center gap-3 rounded-md border border-staff bg-white px-4 py-3 shadow-[0_16px_40px_-24px_rgba(45,45,45,0.5)] md:-left-10"
-          style={{ animationDelay: "480ms" }}
-        >
-          <SealCheckIcon size={26} weight="light" className="text-copper" aria-hidden="true" />
-          <div>
-            <p className="text-sm font-semibold text-charcoal">Obra adquirida</p>
-            <p className="text-xs text-muted">Grade + 5 partes · PDF</p>
-          </div>
-        </div>
-
-        <span className="absolute -top-3 right-5 rounded-md bg-charcoal px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-copper">
-          Premium
-        </span>
+        <Suspense fallback={<HeroScoreSkeleton />}>
+          <HeroScore />
+        </Suspense>
       </div>
     </section>
   );

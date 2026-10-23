@@ -1,4 +1,3 @@
-import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/ssr/ArrowUpRight";
 import { SignOutIcon } from "@phosphor-icons/react/dist/ssr/SignOut";
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
@@ -61,13 +60,6 @@ export default function CuratorLayout({ children }: { children: ReactNode }) {
               <CuratorBadge />
             </Suspense>
           </div>
-          <Link
-            href="/arranjador"
-            className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-[#A9A294] transition-colors duration-300 hover:bg-white/[0.04] hover:text-paper-soft"
-          >
-            <ArrowUpRightIcon size={18} weight="light" aria-hidden="true" />
-            Estúdio do arranjador
-          </Link>
           <SignOutButton />
         </div>
       </aside>

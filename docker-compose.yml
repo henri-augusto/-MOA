@@ -1,5 +1,6 @@
-# No VPS, copie .env.example para .env, preencha DOCKERHUB_USERNAME e rode:
+# No VPS, copie .env.example para .env, preencha e rode:
 #   docker compose pull && docker compose up -d
+# As chaves abaixo entram só no processo do container. A imagem não as contém.
 services:
   moa:
     image: ${DOCKERHUB_USERNAME}/moa:${IMAGE_TAG:-latest}
@@ -11,3 +12,7 @@ services:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
       PORT: 3000
+      SITE_URL: ${SITE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}

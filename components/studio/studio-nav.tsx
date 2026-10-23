@@ -5,12 +5,14 @@ import { HouseSimpleIcon } from "@phosphor-icons/react/dist/csr/HouseSimple";
 import { MusicNotesIcon } from "@phosphor-icons/react/dist/csr/MusicNotes";
 import { QueueIcon } from "@phosphor-icons/react/dist/csr/Queue";
 import { UserCircleIcon } from "@phosphor-icons/react/dist/csr/UserCircle";
+import { WalletIcon } from "@phosphor-icons/react/dist/csr/Wallet";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const baseLinks: { href: string; label: string; icon: Icon }[] = [
   { href: "/arranjador", label: "Início", icon: HouseSimpleIcon },
   { href: "/arranjador/obras", label: "Obras", icon: MusicNotesIcon },
+  { href: "/arranjador/recebimentos", label: "Recebimentos", icon: WalletIcon },
   { href: "/arranjador/perfil", label: "Perfil", icon: UserCircleIcon },
 ];
 

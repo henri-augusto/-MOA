@@ -1,9 +1,9 @@
 import "server-only";
 
-import { io } from "next/cache";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { formatDuration } from "@/lib/arranger/catalog";
-import { ARRANGEMENTS_BUCKET } from "@/lib/supabase/env";
-import { createClient } from "@/lib/supabase/server";
+import { supabaseEnv } from "@/lib/supabase/env";
+import { layoutFixtures } from "./layout-fixtures";
 import type { Listing } from "./types";
 
 export type { Listing };
@@ -21,9 +21,26 @@ type PublishedRow = {
   arranger_name: string;
   preview_video_id: string | null;
   has_preview: boolean;
+  has_audio: boolean;
+  can_purchase?: boolean;
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function createPublicClient() {
+  const { url, publishableKey } = supabaseEnv();
+  // These RPCs are granted to anon. A cookie session would call getSession(),
+  // which compares the JWT expiry with Date.now() and fails prerender.
+  return createSupabaseClient(url, publishableKey, {
+    accessToken: async () => null,
+  });
+}
+
+function withLayoutFixtures(listings: Listing[]) {
+  if (process.env.NODE_ENV === "production") return listings;
+  const ids = new Set(listings.map((work) => work.id));
+  return [...listings, ...layoutFixtures.filter((work) => !ids.has(work.id))];
+}
 
 function toListing(row: PublishedRow): Listing {
   return {
@@ -42,61 +59,28 @@ function toListing(row: PublishedRow): Listing {
       `Arranjo de ${row.arranger_name} para ${row.formation}, com grade e partes cavadas.`,
     previewVideoId: row.preview_video_id,
     hasPreview: Boolean(row.has_preview),
+    hasAudio: Boolean(row.has_audio),
+    canPurchase: Boolean(row.can_purchase),
   };
 }
 
 export async function listPublishedWorks() {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const { data, error } = await supabase.rpc("published_catalog");
   if (error) throw error;
-  return ((data ?? []) as PublishedRow[]).map(toListing);
+  return withLayoutFixtures(((data ?? []) as PublishedRow[]).map(toListing));
 }
 
 export async function getPublishedWork(id: string) {
   if (!UUID_PATTERN.test(id)) return null;
 
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const { data, error } = await supabase.rpc("published_work", { p_id: id });
   if (error) throw error;
 
   const rows = (data ?? []) as PublishedRow[];
   const row = rows[0];
-  return row ? toListing(row) : null;
-}
-
-const SIGNED_URL_SECONDS = 120;
-
-export async function getOwnedPreviewSources(workId: string) {
-  try {
-    await io();
-
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getClaims();
-    const userId = data?.claims?.sub;
-    if (!userId) return null;
-
-    const { data: owned } = await supabase
-      .from("works")
-      .select("score_path, preview_path")
-      .eq("id", workId)
-      .eq("arranger_id", userId)
-      .eq("status", "publicado")
-      .maybeSingle();
-
-    if (!owned || (!owned.score_path && !owned.preview_path)) return null;
-
-    const paths = [owned.score_path, owned.preview_path].filter((path): path is string => Boolean(path));
-    const signed = new Map<string, string>();
-    const { data: links } = await supabase.storage.from(ARRANGEMENTS_BUCKET).createSignedUrls(paths, SIGNED_URL_SECONDS);
-    links?.forEach((entry) => {
-      if (entry.path && entry.signedUrl) signed.set(entry.path, entry.signedUrl);
-    });
-
-    return {
-      scoreUrl: owned.score_path ? (signed.get(owned.score_path) ?? null) : null,
-      previewUrl: owned.preview_path ? (signed.get(owned.preview_path) ?? null) : null,
-    };
-  } catch {
-    return null;
-  }
+  if (row) return toListing(row);
+  if (process.env.NODE_ENV === "production") return null;
+  return layoutFixtures.find((work) => work.id === id) ?? null;
 }
