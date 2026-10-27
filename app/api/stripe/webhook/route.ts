@@ -11,8 +11,6 @@ import {
 } from "@/lib/payments/orders";
 import { accountCanReceiveDestinationCharges, checkoutPaymentIntentId, getStripe } from "@/lib/payments/stripe";
 
-export const runtime = "nodejs";
-
 async function handlePaymentSucceeded(paymentIntent: Stripe.PaymentIntent) {
   const orderIdRaw = paymentIntent.metadata?.order_id;
   let orderId = orderIdRaw ? Number(orderIdRaw) : NaN;
